@@ -1,12 +1,16 @@
 ---
 name: alpha-handoff
-description: Alpha(Claude)의 14:00 인계. 08:00 alpha-scan이 만든 지시서를 최종 점검해 Slack #request 채널에 게시한다. GitHub Actions alpha-daily 워크플로의 handoff 잡이 호출한다.
+description: Alpha(Claude)의 일일 실무 2단계. alpha-scan이 만든 지시서를 새 컨텍스트로 재점검해 Slack #request 채널에 게시한다. 게시가 곧 인계다. GitHub Actions alpha-daily 워크플로가 scan 직후에 호출한다.
 ---
 
-# alpha-handoff — 14:00 인계
+# alpha-handoff — 실무 2단계 (인계)
 
-08:00에 만든 지시서를 **Slack #request에 올려 Cursor에게 넘긴다.**
+앞 단계가 만든 지시서를 **Slack #request에 올려 Cursor에게 넘긴다.**
 새로 조사하지 않는다. 이미 만든 것을 검증하고 게시하는 단계다.
+
+**너는 스캔을 한 그 세션이 아니다.** 이 단계가 별도 호출인 이유가 그것이다 —
+자기가 쓴 걸 자기가 다시 읽으면 재점검이 아니라 자기 판정이다.
+지시서를 처음 보는 사람처럼 읽어라.
 
 ## 1. 오늘자 지시서를 찾는다
 
@@ -15,23 +19,18 @@ REPORT="$(bash scripts/find-todays-report.sh)"
 echo "$REPORT"
 ```
 
-이 스크립트는 원격의 `claude/v3.0.*` 브랜치들을 훑어 오늘자
-`reports/requests/<YYYY-MM-DD>.md` 를 워킹트리로 꺼낸다.
+지시서는 **커밋되어 있지 않다.** `reports/` 는 `.gitignore` 에 있다 —
+이 리포는 public이고 지시서에는 아직 안 고친 결함의 위치가 들어가기 때문이다.
+같은 워크플로 실행의 앞 스텝이 같은 디스크에 써 둔 것을 읽는다.
 날짜는 **KST 기준**이다(러너는 UTC라 그냥 `date`를 쓰면 하루가 밀린다).
 
-**못 찾으면 게시하지 말고 멈춘다.** 08:00 스캔이 실패했다는 뜻이고,
+**못 찾으면 게시하지 말고 멈춘다.** 스캔이 실패했다는 뜻이고,
 빈 인계나 지어낸 인계를 올리는 것보다 안 올리는 게 낫다.
-대신 실패 사실만 한 줄로 Slack에 올린다:
-
-```bash
-printf '# biolabs3 · Alpha\n\n오늘(%s) 08:00 스캔 산출물을 찾지 못했다. 인계할 내용이 없다.\nActions의 alpha-daily / scan 잡 로그를 확인하라.\n' \
-  "$(TZ=Asia/Seoul date +%Y-%m-%d)" > /tmp/alpha-fail.md
-bash scripts/post-to-slack.sh /tmp/alpha-fail.md
-```
+워크플로의 `if: failure()` 스텝이 실패 사실만 Slack에 올린다 — 네가 대신 지어내지 마라.
 
 ## 2. 게시 전 점검 (이게 이 스킬의 존재 이유다)
 
-08:00의 자기 판정은 최종 판정이 아니다. 올리기 전에 다시 본다:
+스캔 단계의 자기 판정은 최종 판정이 아니다. 올리기 전에 다시 본다:
 
 - **비밀값 유출** — 토큰·키·비밀번호·내부 호스트명이 본문에 있나?
   하나라도 있으면 그 줄을 지우고 위치 표기로 바꾼 뒤 커밋한다. 게시가 곧 유출이다.
@@ -42,7 +41,8 @@ bash scripts/post-to-slack.sh /tmp/alpha-fail.md
 - **실행 가능성** — 각 항목이 Cursor가 읽고 바로 착수할 수 있는가?
   "조사 필요"만 적힌 항목은 Cursor가 못 받는다. 착수점을 적어주거나 내려라.
 
-수정했으면 같은 브랜치에 커밋해 원격에도 반영한다(영어 커밋 메시지 + 트레일러).
+수정은 파일을 그 자리에서 고치면 된다. **커밋하지 마라** — 이 파일은 어차피 ignore 대상이고,
+Slack에 올라가는 내용이 곧 최종본이다.
 
 ## 3. 게시한다
 
@@ -61,12 +61,13 @@ bash scripts/post-to-slack.sh "$REPORT"
 Slack에 올라간 시점부터 **그 지시서는 Cursor의 큐다.** Alpha는 손대지 않는다.
 같은 항목을 Alpha가 나중에 직접 구현하면 충돌한다.
 
-내일 08:00 스캔에서 어제 지시서의 처리 여부를 확인해
-미처리 항목을 "이월"로 다시 올린다 — 그게 이 루프가 닫히는 방식이다.
+게시가 끝나면 러너의 `reports/` 는 워크플로가 지운다. **Slack 채널이 유일한 이력이다.**
+내일 스캔이 어제 항목의 처리 여부를 확인하려면 #request 채널을 읽어야 한다 —
+리포에는 어제 지시서가 남아 있지 않다.
 
 ## 5. 끝내기 전에
 
 - [ ] 게시한 보고서에 비밀값이 없다
 - [ ] `post-to-slack.sh` 가 exit 0 으로 끝났다 (HTTP 200)
-- [ ] 게시 중 수정한 내용이 있으면 원격 브랜치에도 반영됐다
 - [ ] 로그 어디에도 웹훅 URL이 찍히지 않았다
+- [ ] `reports/` 를 커밋하지 않았다

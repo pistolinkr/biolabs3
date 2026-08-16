@@ -22,15 +22,31 @@
 ### Alpha의 하루 (일일 루프)
 
 ```
-08:00 KST  /alpha-scan     버그 탐지 · 코드 리뷰 · 보안 점검 · 리서치
-                           → reports/requests/<날짜>.md 를 claude/v3.0.N 에 커밋·푸시
-14:00 KST  /alpha-handoff  지시서 재점검(비밀값·근거 유효성·중복) → Slack #request 게시
+14:00 KST  /alpha-scan     버그 탐지 · 코드 리뷰 · 보안 점검 · 리서치
+                           → reports/requests/<날짜>.md (러너 디스크에만, 커밋 안 함)
+           /alpha-handoff  새 컨텍스트로 재점검(비밀값·근거 유효성·중복)
+                           → Slack #request 게시
 그 이후     Cursor가 #request를 받아 cursor/v3.0.N 으로 구현
 ```
 
 트리거는 `.github/workflows/alpha-daily.yml`(GitHub Actions cron)이다.
-cron은 UTC로 돌아서 08:00 KST = `0 23 * * *`, 14:00 KST = `0 5 * * *` 로 적혀 있다.
+cron은 UTC로 돌아서 14:00 KST = `0 5 * * *` 로 적혀 있다.
 **날짜를 만들 때는 반드시 `TZ=Asia/Seoul`** — 안 붙이면 러너가 UTC라 하루 밀린다.
+
+### 지시서는 커밋하지 않는다 (중요)
+
+**이 리포는 public이다.** 지시서에는 아직 안 고친 결함이 `파일:줄` 단위로 들어간다.
+비밀값 자체는 쓰지 않게 되어 있지만 **위치 목록 자체가 약점 지도**다.
+그래서 `reports/` 는 `.gitignore` 에 있고, 지시서는 러너 안에서만 존재하다가
+Slack으로 나가고 러너와 함께 사라진다. **`git add reports/` 를 시도하지 마라.**
+
+두 단계를 한 실행 안에서 연달아 부르는 것도 이 때문이다 —
+GitHub Actions에서 실행 간에 파일을 넘기려면 아티팩트를 써야 하는데,
+public 리포에서는 그것도 노출 경로다. 그래도 호출은 두 번으로 나눈다:
+재점검은 새 컨텍스트에서 해야 재점검이고, 같은 세션이 자기 글을 다시 읽으면 자기 판정이다.
+
+**어제 지시서의 이력은 Slack #request 채널에 있다.** 리포에는 없다.
+미처리 항목을 이월하려면 채널을 읽어야 한다.
 
 필요한 리포 시크릿: `ANTHROPIC_API_KEY`, `SLACK_WEBHOOK_URL`.
 웹훅 URL은 인자로 넘기지 말고 환경변수로만 받는다(인자는 `ps`에 노출된다).

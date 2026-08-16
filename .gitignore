@@ -116,3 +116,21 @@ client/public/__manus__/version.json
 
 # Claude Code agent worktrees (ephemeral, contain node_modules — 1.4GB+)
 .claude/worktrees/
+
+# ---------------------------------------------------------------------------
+# 에이전트 산출물 — 리포에 남기지 않는다
+#
+# 이 리포는 public이다. 일일 지시서에는 아직 안 고친 결함의 위치가 파일:줄 단위로
+# 들어간다(보안 항목 포함). 비밀값 자체는 애초에 쓰지 않게 되어 있지만,
+# **위치 목록 자체가 약점 지도**다. 공개된 곳에 매일 쌓이면 안 된다.
+#
+# 그래서 지시서는 러너 안에서만 만들어져 Slack #request로 나가고,
+# 러너와 함께 사라진다. git에는 어떤 흔적도 남지 않는다.
+# 이력이 필요하면 Slack 채널이 그 이력이다.
+reports/
+company/
+
+# 조사 중 만든 임시 산출물 (재현 케이스, 로그 덤프, 패치 파일)
+*.patch
+scratch/
+.agent-tmp/

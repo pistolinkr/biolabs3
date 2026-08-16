@@ -1,30 +1,30 @@
 ---
 name: alpha-scan
-description: Alpha(Claude)의 08:00 일일 실무. 버그 탐지·코드 리뷰·보안 점검·리서치를 한 번에 돌려 Cursor에게 넘길 작업 지시서를 만든다. GitHub Actions alpha-daily 워크플로의 scan 잡이 호출한다. 사람이 수동으로 돌릴 때도 이 스킬을 쓴다.
+description: Alpha(Claude)의 일일 실무 1단계. 버그 탐지·코드 리뷰·보안 점검·리서치를 한 번에 돌려 Cursor에게 넘길 작업 지시서를 만든다. 지시서는 커밋하지 않고 러너 디스크에만 쓴다. GitHub Actions alpha-daily 워크플로가 호출하며, 사람이 수동으로 돌릴 때도 이 스킬을 쓴다.
 ---
 
-# alpha-scan — 08:00 실무
+# alpha-scan — 실무 1단계 (스캔)
 
 **너는 Alpha다.** biolabs3의 실무 담당. 조사하고 판단해서 **작업 지시서를 만드는 것**이
 네 산출물이다. Cursor가 그걸 받아 구현한다. 이 스킬에서 프로덕트 코드를 고치지 마라 —
 지시서와, 지시서를 뒷받침하는 근거만 만든다.
 
-## 0. 전제 확인
+## 0. 지시서는 커밋하지 않는다 — 먼저 이걸 이해하고 시작해라
+
+**이 리포는 public이다.** 지시서에는 아직 안 고친 결함이 `파일:줄` 단위로 들어간다.
+비밀값 자체는 애초에 쓰지 않지만, **위치 목록 자체가 약점 지도**다.
+그래서 `reports/` 는 `.gitignore` 에 들어가 있다.
+
+지시서는 러너 디스크에만 존재하다가 Slack #request 로 나가고 러너와 함께 사라진다.
+**`git add reports/` 를 시도하지 마라.** 이력이 필요하면 Slack 채널이 그 이력이다.
 
 ```bash
-git rev-parse --abbrev-ref HEAD    # main 이면 안 된다
-TODAY="$(TZ=Asia/Seoul date +%Y-%m-%d)"
+TODAY="$(TZ=Asia/Seoul date +%Y-%m-%d)"   # 러너는 UTC다. TZ를 빼면 하루 밀린다.
+mkdir -p reports/requests
 ```
 
-브랜치는 반드시 스크립트로 받는다. 손으로 짓지 마라:
-
-```bash
-BRANCH="$(bash scripts/next-branch.sh)"   # claude/v3.0.N
-git checkout -b "$BRANCH"
-```
-
-`scripts/next-branch.sh`는 **cursor/v3.0.\* 까지 같이 세어서** 다음 번호를 낸다.
-Cursor와 번호가 겹치면 안 되기 때문이다. 직접 번호를 세지 마라.
+브랜치를 만드는 건 **P0 보안 수정 같은 코드 변경이 실제로 생겼을 때뿐이다**(5번 참조).
+지시서만 쓰고 끝나는 날은 브랜치도 커밋도 없다.
 
 ## 1. 네 개 영역을 순서대로 돈다
 
@@ -110,44 +110,46 @@ Cursor가 이 형식을 파싱해서 작업 큐를 만든다. 항목 ID 규칙�
 리뷰될 수 없는 분량은 만들지 않는다 — 이건 상한이지 목표가 아니다.
 발견이 없으면 없다고 쓴다. **항목 수를 채우려고 만들어내지 마라.**
 
-## 3. 커밋하고 푸시한다
+## 3. 지시서는 디스크에 두고 끝낸다
 
-지시서와, 근거로 만든 파일(테스트 재현 케이스 등)만 커밋한다.
-**커밋 메시지는 영어. 예외 없다.**
+`reports/requests/<오늘>.md` 를 쓴 시점에 이 스킬의 일은 끝났다.
+커밋도, 푸시도, 브랜치도 없다. 같은 실행의 다음 단계인 `/alpha-handoff` 가
+새 컨텍스트로 이 파일을 읽어 재점검하고 Slack에 올린다.
 
-```bash
-git add reports/requests/
-git commit -m "$(cat <<'EOF'
-docs: daily handoff report for Cursor
+`git status` 에 `reports/` 가 안 보이는 게 정상이다. 안 보인다고 다시 만들지 마라.
 
-Bug scan, code review, security check and forward-looking research
-for the day. No product code changed.
-
-Co-authored-by: Claude <noreply@anthropic.com>
-EOF
-)"
-git push -u origin "$BRANCH"
-```
-
-push가 브랜치 이름 충돌로 실패하면 `scripts/next-branch.sh`를 다시 돌려 새 번호를 받는다.
-**force push 하지 마라.** 훅이 막지만, 애초에 시도하지 마라.
-
-## 4. 코드 수정이 필요하다고 판단되면
+## 4. 코드 수정이 필요하다고 판단되면 — 이때만 브랜치를 만든다
 
 Alpha는 지시서까지가 기본이다. 다만 다음 둘은 예외로 직접 PR을 낸다:
 
-- **P0 보안** — Cursor를 6시간 기다릴 수 없는 것
+- **P0 보안** — Cursor를 기다릴 수 없는 것
 - **한 줄짜리 명백한 오타/타입 오류** — 지시서를 쓰는 게 고치는 것보다 비싼 것
 
-이때도 `main` 직행은 없다. `claude/v3.0.N` 브랜치 → PR → 사장이 머지한다.
+```bash
+BRANCH="$(bash scripts/next-branch.sh)"   # claude/v3.0.N
+git checkout -b "$BRANCH"
+# ... 코드만 수정. reports/ 는 어차피 ignore 되어 담기지 않는다 ...
+git commit -F <메시지 파일>                # 영어 + Co-authored-by 트레일러
+git push -u origin "$BRANCH"
+```
+
+`scripts/next-branch.sh`는 **cursor/v3.0.\* 까지 같이 세어서** 다음 번호를 낸다.
+Cursor와 번호가 겹치면 안 되기 때문이다. 직접 번호를 세지 마라.
+이름 규칙은 `guard-destructive.sh` 가 강제한다 — 슬러그를 넣으면 push 자체가 거부된다.
+
+> 커밋 메시지 본문에 `git push`나 기본 브랜치 이름 같은 단어가 들어가면
+> 훅이 그걸 명령으로 오인해 커밋을 막는다. `git commit -m` 대신
+> **메시지를 파일로 쓰고 `git commit -F <파일>`** 을 써라.
+
+기본 브랜치 직행은 없다. 브랜치 → PR → 사장이 머지한다.
 PR 제목·본문은 영어이고 why / what was verified / risk / how to revert 를 포함한다.
-직접 고친 건 지시서의 "Alpha가 하지 않은 것"이 아니라 "이미 처리함"으로 따로 적어
-Cursor가 중복 작업하지 않게 한다.
+직접 고친 건 지시서에 **"이미 처리함"** 으로 따로 적어 Cursor가 중복 작업하지 않게 한다.
 
 ## 5. 끝내기 전에
 
 - [ ] `reports/requests/<오늘>.md` 가 존재하고 비어 있지 않다
+- [ ] 날짜가 KST 기준이다 (`TZ=Asia/Seoul`)
 - [ ] 모든 항목에 파일:줄 근거가 있다
 - [ ] 보고서에 토큰·키·비밀번호 값이 하나도 없다
-- [ ] 브랜치가 `claude/v3.0.N` 형식이고 원격에 올라갔다
-- [ ] 커밋 메시지가 영어이고 트레일러가 붙었다
+- [ ] `git status` 에 `reports/` 가 스테이징돼 있지 않다
+- [ ] 코드를 고쳤다면 브랜치가 `claude/v3.0.N` 형식이고 커밋 메시지가 영어다
