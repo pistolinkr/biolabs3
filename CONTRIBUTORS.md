@@ -16,10 +16,21 @@ These trailers do **not** appear in GitHub's Contributors sidebar, because the a
 not bound to GitHub accounts. That is intentional — we do not commit under accounts we do not
 own. The trailers exist so `git log` tells the truth about who wrote what.
 
-| Agent | Trailer | Work |
-|---|---|---|
-| Claude (Anthropic) | `Co-authored-by: Claude <noreply@anthropic.com>` | v3.x engineering organization; detection, investigation, implementation, evaluation |
-| Cursor Agent | `Co-authored-by: Cursor <cursoragent@cursor.com>` | Earlier assisted commits |
+| Agent | Job title | Branches | Trailer | Work |
+|---|---|---|---|---|
+| Claude (Anthropic) | Alpha | `claude/v3.0.X` | `Co-authored-by: Claude <noreply@anthropic.com>` | Daily bug scan, code review, security review and forward-looking research; writes the work order Cursor executes |
+| Cursor Agent | — | `cursor/v3.0.X` | `Co-authored-by: Cursor <cursoragent@cursor.com>` | Implements the work orders Alpha hands off |
+
+Branch numbering is a single sequence shared by both agents: `scripts/next-branch.sh` counts
+`claude/*` and `cursor/*` together and returns max + 1, so no two agents ever claim the same
+number. The owner's own branches (`obserser/v3.0.X`) are outside that sequence and no agent
+writes to them.
+
+Alpha runs on a fixed daily cycle (`.github/workflows/alpha-daily.yml`): it scans at 08:00 KST,
+commits a work order to a `claude/v3.0.X` branch, re-checks it at 14:00 KST and posts it to the
+owner's Slack `#request` channel, where Cursor picks it up. Alpha does not implement what it
+files, except for P0 security issues and one-line typos — separating who finds a problem from
+who fixes it is the point.
 
 ### How the organization works
 

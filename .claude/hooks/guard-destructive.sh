@@ -30,6 +30,12 @@ case "$COMMAND" in
     deny "CHARTER 4조: 락파일 재생성 금지" ;;
   *"vercel --prod"*|*"deploy"*"--prod"*|*"render deploy"*)
     deny "CHARTER 4조: 프로덕션 배포 트리거 금지 — 사장 결재 필요" ;;
+  # main 직행 금지. 산출물은 claude/v3.0.N 브랜치 → PR 까지다.
+  *"git push"*" main"*|*"git push"*":main"*|*"git push"*"main:"*)
+    deny "main 직접 push 금지 — claude/v3.0.N 브랜치에 올리고 PR을 내라" ;;
+  # 사장 전용 브랜치. 철자 오타(obserser)까지 같이 막는다.
+  *"git push"*obserser*|*"git push"*observer*)
+    deny "obserser/* 는 사장 전용 브랜치다 — 에이전트는 읽기만 한다" ;;
 esac
 
 exit 0

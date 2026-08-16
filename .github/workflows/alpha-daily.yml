@@ -1,0 +1,111 @@
+name: alpha-daily
+
+# Alpha(Claude)의 하루. CLAUDE.md "일일 루프" 참조.
+#
+#   08:00 KST  scan     버그 탐지 · 코드 리뷰 · 보안 · 리서치 → 지시서를 claude/v3.0.N 에 커밋
+#   14:00 KST  handoff  지시서를 점검해 Slack #request 에 게시 → Cursor가 받는다
+#
+# cron은 UTC로만 돈다. KST = UTC+9 이므로 08:00 KST 는 전날 23:00 UTC 다.
+# 스크립트 안에서 날짜를 만들 때는 반드시 TZ=Asia/Seoul 을 붙여라 — 안 붙이면 하루 밀린다.
+
+on:
+  schedule:
+    - cron: "0 23 * * *" # 08:00 KST (전날 23:00 UTC)
+    - cron: "0 5 * * *" #  14:00 KST (당일 05:00 UTC)
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: "수동 실행할 단계"
+        required: true
+        default: scan
+        type: choice
+        options: [scan, handoff]
+
+concurrency:
+  # 같은 단계가 겹쳐 돌면 브랜치 번호가 충돌한다.
+  group: alpha-daily-${{ github.event.schedule || inputs.phase }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  scan:
+    name: 08:00 scan
+    if: github.event.schedule == '0 23 * * *' || inputs.phase == 'scan'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # next-branch.sh 가 원격 브랜치를 세야 한다.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "biolabs3-alpha"
+          git config user.email "noreply@anthropic.com"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run alpha-scan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 권한 프롬프트는 무인 실행에서 답할 사람이 없어 건너뛴다.
+          # 파괴적 명령은 프롬프트가 아니라 .claude/hooks/guard-destructive.sh 가
+          # PreToolUse 에서 결정론적으로 막는다 — 훅은 이 플래그와 무관하게 계속 돈다.
+          claude -p "/alpha-scan" \
+            --dangerously-skip-permissions \
+            --output-format stream-json --verbose
+
+      - name: Fail loudly if no report was produced
+        run: |
+          TODAY="$(TZ=Asia/Seoul date +%Y-%m-%d)"
+          git fetch origin '+refs/heads/claude/*:refs/remotes/origin/claude/*'
+          if bash scripts/find-todays-report.sh "$TODAY" >/dev/null 2>&1; then
+            echo "OK: ${TODAY} 지시서가 원격에 있다."
+          else
+            echo "::error::alpha-scan 이 ${TODAY} 지시서를 원격에 남기지 않았다. 14:00 인계가 빈손이 된다."
+            exit 1
+          fi
+
+  handoff:
+    name: 14:00 handoff
+    if: github.event.schedule == '0 5 * * *' || inputs.phase == 'handoff'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "biolabs3-alpha"
+          git config user.email "noreply@anthropic.com"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run alpha-handoff
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          claude -p "/alpha-handoff" \
+            --dangerously-skip-permissions \
+            --output-format stream-json --verbose
