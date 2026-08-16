@@ -5,6 +5,55 @@
 ## 정체성
 `biolabs3` = AI 에이전트에게 맡긴 차세대 biolabs. 버전은 v3.0.0부터. v2.x는 사람이 만든 세대.
 
+**리포는 에이전트만 만진다.** 사람(사장)은 방향을 정하고 PR을 머지한다.
+`main`에 직접 커밋·푸시하는 주체는 아무도 없다 — 에이전트도, 에이전트를 대신해서도.
+
+## 누가 무엇을 하는가
+
+| | 누구 | 브랜치 | 역할 |
+|---|---|---|---|
+| **사장** | @pistolinkr | `obserser/v3.0.X` | 방향 결정, PR 머지. 에이전트는 이 브랜치를 건드리지 않는다. |
+| **Alpha** | Claude | `claude/v3.0.X` | **실무.** 버그 탐지·코드 리뷰·보안·리서치 → 작업 지시서 |
+| | Cursor | `cursor/v3.0.X` | Alpha의 지시서를 받아 구현 |
+
+> 원격의 사장 브랜치 이름은 `observer`가 아니라 **`obserser`** 로 올라가 있다(오타).
+> 에이전트는 어느 쪽 철자든 손대지 않는다. 이름 정정은 사장이 판단할 일이다.
+
+### Alpha의 하루 (일일 루프)
+
+```
+14:00 KST  /alpha-scan     버그 탐지 · 코드 리뷰 · 보안 점검 · 리서치
+                           → reports/requests/<날짜>.md (러너 디스크에만, 커밋 안 함)
+           /alpha-handoff  새 컨텍스트로 재점검(비밀값·근거 유효성·중복)
+                           → Slack #request 게시
+그 이후     Cursor가 #request를 받아 cursor/v3.0.N 으로 구현
+```
+
+트리거는 `.github/workflows/alpha-daily.yml`(GitHub Actions cron)이다.
+cron은 UTC로 돌아서 14:00 KST = `0 5 * * *` 로 적혀 있다.
+**날짜를 만들 때는 반드시 `TZ=Asia/Seoul`** — 안 붙이면 러너가 UTC라 하루 밀린다.
+
+### 지시서는 커밋하지 않는다 (중요)
+
+**이 리포는 public이다.** 지시서에는 아직 안 고친 결함이 `파일:줄` 단위로 들어간다.
+비밀값 자체는 쓰지 않게 되어 있지만 **위치 목록 자체가 약점 지도**다.
+그래서 `reports/` 는 `.gitignore` 에 있고, 지시서는 러너 안에서만 존재하다가
+Slack으로 나가고 러너와 함께 사라진다. **`git add reports/` 를 시도하지 마라.**
+
+두 단계를 한 실행 안에서 연달아 부르는 것도 이 때문이다 —
+GitHub Actions에서 실행 간에 파일을 넘기려면 아티팩트를 써야 하는데,
+public 리포에서는 그것도 노출 경로다. 그래도 호출은 두 번으로 나눈다:
+재점검은 새 컨텍스트에서 해야 재점검이고, 같은 세션이 자기 글을 다시 읽으면 자기 판정이다.
+
+**어제 지시서의 이력은 Slack #request 채널에 있다.** 리포에는 없다.
+미처리 항목을 이월하려면 채널을 읽어야 한다.
+
+필요한 리포 시크릿: `ANTHROPIC_API_KEY`, `SLACK_WEBHOOK_URL`.
+웹훅 URL은 인자로 넘기지 말고 환경변수로만 받는다(인자는 `ps`에 노출된다).
+
+**Alpha는 지시서까지가 기본이다.** 직접 코드를 고치는 예외는 둘뿐 —
+P0 보안, 그리고 지시서를 쓰는 게 고치는 것보다 비싼 한 줄짜리 오타. 그때도 PR을 거친다.
+
 ## 조직 구조
 
 **Department: Engineering** — Role은 판단하고, Worker는 실행한다. 이 둘을 혼동하지 마라.
@@ -54,24 +103,36 @@ workflow는 `.claude/skills/*/SKILL.md`, 설정값(depth·routing·timeout·retr
 ## 브랜치 규칙 (엄수)
 
 ```
-claude/workers/v3.<MINOR>.<PATCH>
-예) claude/workers/v3.1.1, claude/workers/v3.1.2, claude/workers/v3.1.3
+claude/v3.<MINOR>.<PATCH>     Alpha (Claude)
+cursor/v3.<MINOR>.<PATCH>     Cursor
+obserser/v3.<MINOR>.<PATCH>   사장 전용 — 에이전트 접근 금지
 ```
 
-**브랜치 이름에 슬러그·날짜·설명을 넣지 마라.** 버전 번호만 쓴다.
+**브랜치 이름에 슬러그·날짜·설명을 넣지 마라.** 버전 번호만 쓴다. 예외 없다.
 이유: 브랜치 목록 UI에서 이름이 잘려서 결국 구분이 안 된다. 무엇을 바꿨는지는
 **커밋 메시지와 PR 본문이 설명한다** — 그게 그것들의 존재 이유다.
+
+이건 권고가 아니라 강제다. `guard-destructive.sh`가 PreToolUse에서 `claude/*`·`cursor/*`
+push를 가로채 `^(claude|cursor)/v[0-9]+\.[0-9]+\.[0-9]+$` 에 맞지 않으면 거부한다.
+세션 도구가 슬러그 브랜치를 지정하더라도 그쪽으로 push하지 말고, 아래 스크립트로
+받은 이름으로 옮겨 담아라.
 
 브랜치 이름은 직접 짓지 말고 반드시 이 명령으로 받아라:
 
 ```bash
-BRANCH="$(zsh "$BIOLABS3_SHARED/bin/next-branch.sh")"
+BRANCH="$(bash scripts/next-branch.sh)"   # claude/v3.0.N
 git checkout -b "$BRANCH"
 ```
 
-- PATCH는 원격의 같은 MINOR 대 최대값 +1로 자동 계산된다. 손으로 세지 마라.
-- MINOR(`3.1` → `3.2`)는 사람만 올린다: `$BIOLABS3_SHARED/config/branch-version.txt`.
+**PATCH는 `claude/` 와 `cursor/` 를 하나의 수열로 묶어서 채번한다.**
+두 에이전트가 각자 세면 같은 번호가 나오고, 그러면 어느 쪽 작업인지 이력에서 구분이 안 된다.
+원격에 `claude/v3.0.1`, `cursor/v3.0.2` 가 있으면 다음 Alpha 브랜치는 **`claude/v3.0.3`** 이다.
+`scripts/next-branch.sh` 가 이 계산을 한다 — **직접 번호를 세지 마라.**
+
+- 스크립트가 원격 조회에 실패하면 채번하지 않고 멈춘다(중복 push 방지). 로컬만 보고 짐작하지 마라.
+- MINOR(`3.0` → `3.1`)는 사람만 올린다: `config/branch-version.txt`.
 - push 시 이름이 이미 있으면(동시 실행 충돌) 스크립트를 다시 돌려 새 번호를 받아라. 강제로 덮어쓰지 마라.
+- `obserser/*`(사장 브랜치)에는 push·rebase·삭제 어느 것도 하지 않는다. 읽기만 한다.
 - `release/vN.N` 규칙 폐기. `main` 직접 커밋·푸시 금지, 예외 없음.
 - 산출물은 PR까지. merge는 사람이 한다.
 
