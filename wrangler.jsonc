@@ -1,0 +1,14 @@
+{
+  // Static-only Cloudflare Workers deploy.
+  // Serves the built Vite client (dist/public) as static assets with SPA
+  // routing. This is FRONTEND-ONLY: the Express /api/* endpoints in
+  // server/index.ts are NOT served here and will return 404. See vercel.json
+  // for the full-stack deploy configuration this app was originally built for.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "biolabs3",
+  "compatibility_date": "2026-09-08",
+  "assets": {
+    "directory": "./dist/public",
+    "not_found_handling": "single-page-application"
+  }
+}
