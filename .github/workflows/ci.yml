@@ -1,14 +1,25 @@
 name: CI
 
+# 이 리포에는 main 브랜치가 없다. 기본 브랜치는 obserser/v3.0.0(사장 브랜치)이고,
+# 작업은 claude/v3.0.N · cursor/v3.0.N 에서 이뤄진다.
+# 예전 트리거는 main 과 release/** 만 보고 있어서 **한 번도 돈 적이 없다.**
+# release/vN.N 규칙은 폐기됐다(CLAUDE.md 브랜치 규칙 참조).
+
 on:
   push:
-    branches: [main, "release/**"]
+    branches: ["claude/**", "cursor/**", "obserser/**"]
   pull_request:
-    branches: [main, "release/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  quality-gate:
+    name: check · test · build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -23,5 +34,12 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # CLAUDE.md "품질 게이트" 는 이 셋을 요구한다. 예전 CI는 build 만 돌렸다.
+      - name: Typecheck
+        run: pnpm check
+
+      - name: Test
+        run: pnpm test
+
       - name: Build
-        run: pnpm run build
+        run: pnpm build
