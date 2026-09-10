@@ -1,0 +1,73 @@
+name: Deploy Pages
+
+# biolabs.work 은 그동안 Pages 의 "Deploy from a branch"(build_type=legacy) 였다.
+# 빌드 단계가 없어서 Jekyll 이 리포 루트의 README.md 를 렌더링해 내보내고 있었고,
+# 실제 앱(client/src/pages/Landing.tsx)은 한 번도 배포된 적이 없다.
+# 이 워크플로가 dist/public 을 빌드해서 Pages 아티팩트로 올린다.
+#
+# 아직 잠들어 있다: 사람이 Settings > Pages > Source 를 "GitHub Actions" 로
+# 바꾸기 전까지 deploy 잡은 실패한다. 그 설정은 에이전트가 만지지 않는다.
+
+# 배포는 사장이 PR 을 머지하는 순간에만 일어난다. 에이전트 브랜치(claude/*, cursor/*)
+# push 는 프로덕션을 건드리지 않는다. 글롭이라 obserser/v4.0.0 으로 올라가도 그대로 산다.
+on:
+  push:
+    branches: ["obserser/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포는 취소하지 않는다. 중간에 끊기면 Pages 가 반쯤 갱신된 상태로 남는다.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build dist/public
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Pages 에는 vercel.json 의 /api/* rewrite 가 없다.
+      # 이 플래그가 UniProt·RCSB·AlphaFold 를 브라우저에서 직접 부르게 한다.
+      - name: Build
+        run: pnpm build
+        env:
+          VITE_DIRECT_UPSTREAM: "1"
+
+      # Pages 는 rewrite 를 지원하지 않고 모르는 경로에 404.html 을 준다.
+      # index.html 사본을 두면 /binary 같은 딥링크에서 SPA 가 그대로 뜬다.
+      - name: SPA fallback
+        run: cp dist/public/index.html dist/public/404.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/public
+
+  deploy:
+    name: deploy to biolabs.work
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

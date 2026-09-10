@@ -1,3 +1,4 @@
+import { ALPHAFOLD_BASE, RCSB_FILES_BASE } from "@/lib/apiBase";
 import type { ProteinSelection } from "@/lib/proteinApis";
 
 export interface ResolvedStructure {
@@ -8,17 +9,17 @@ export interface ResolvedStructure {
 
 const AF_ORIGIN = "https://alphafold.ebi.ac.uk";
 
-/** Map absolute AlphaFold DB URLs to same-origin proxy paths. */
+/** Rewrite absolute AlphaFold DB URLs onto the configured base. */
 export function alphafoldUrlToProxy(absoluteUrl: string): string {
   if (absoluteUrl.startsWith(AF_ORIGIN)) {
-    return `/api/alphafold/${absoluteUrl.slice(AF_ORIGIN.length + 1)}`;
+    return `${ALPHAFOLD_BASE}/${absoluteUrl.slice(AF_ORIGIN.length + 1)}`;
   }
   return absoluteUrl;
 }
 
 async function fetchAlphaFoldResolved(accession: string): Promise<ResolvedStructure> {
   const acc = accession.trim();
-  const res = await fetch(`/api/alphafold/api/prediction/${encodeURIComponent(acc)}`, {
+  const res = await fetch(`${ALPHAFOLD_BASE}/api/prediction/${encodeURIComponent(acc)}`, {
     headers: { Accept: "application/json" },
   });
 
@@ -69,7 +70,7 @@ export async function resolveStructure(selection: ProteinSelection): Promise<Res
     const id = selection.id.trim().toUpperCase();
     if (!id) throw new Error("Missing PDB id");
     return {
-      url: `/api/rcsb-files/download/${id}.cif`,
+      url: `${RCSB_FILES_BASE}/download/${id}.cif`,
       format: "mmcif",
       provenance: `RCSB ${id}`,
     };
@@ -94,7 +95,7 @@ export async function resolveStructure(selection: ProteinSelection): Promise<Res
       throw new Error("No PDB cross-reference for this UniProt entry");
     }
     return {
-      url: `/api/rcsb-files/download/${pdbId}.cif`,
+      url: `${RCSB_FILES_BASE}/download/${pdbId}.cif`,
       format: "mmcif",
       provenance: `PDB ${pdbId} (UniProt ${acc})`,
     };
@@ -104,7 +105,7 @@ export async function resolveStructure(selection: ProteinSelection): Promise<Res
   if (selection.pdbIds?.length) {
     const pdbId = selection.pdbIds[0].toUpperCase();
     return {
-      url: `/api/rcsb-files/download/${pdbId}.cif`,
+      url: `${RCSB_FILES_BASE}/download/${pdbId}.cif`,
       format: "mmcif",
       provenance: `PDB ${pdbId} (UniProt ${acc})`,
     };
