@@ -1,3 +1,5 @@
+import { RCSB_SEARCH_BASE, UNIPROT_BASE } from "@/lib/apiBase";
+
 export type ProteinSearchSource = "rcsb" | "uniprot";
 
 export interface ProteinSearchHit {
@@ -22,19 +24,16 @@ export interface ProteinSelection {
   fileName?: string;
 }
 
-const UNIPROT_PREFIX = "/api/uniprot";
-const RCSB_SEARCH_PREFIX = "/api/rcsb-search";
-
 const DEFAULT_PAGE_SIZE = 20;
 
 function uniprotUrl(pathWithQuery: string): string {
   const path = pathWithQuery.startsWith("/") ? pathWithQuery : `/${pathWithQuery}`;
-  return `${UNIPROT_PREFIX}${path}`;
+  return `${UNIPROT_BASE}${path}`;
 }
 
 function rcsbSearchUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
-  return `${RCSB_SEARCH_PREFIX}${p}`;
+  return `${RCSB_SEARCH_BASE}${p}`;
 }
 
 function getProteinName(entry: Record<string, unknown>): string {
